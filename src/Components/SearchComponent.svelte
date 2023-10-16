@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { InventoryItem } from "../Types/InventoryItem";
+  import { InventoryItemType, type InventoryItem } from "../Types/InventoryItem";
+  import type { IInventoryItemAlternatePrice } from "../Types/InventoryItemAlternatePrice";
   import type { Filter, QueryParameters } from "../Types/QueryParameters";
   import type { WebOrderItem } from "../Types/WebOrder";
   import { apiFetch } from "../lib/apiClient";
@@ -20,7 +21,7 @@
 
   const doSearch = async () => {
     // filter on the item number
-
+    filters = [warehouseFilter];
     filters.push({
       FieldName: "itemnum",
       Op: "CONTAINS",
@@ -54,15 +55,29 @@
   let cartItems: WebOrderItem[] = [];
 
   const addItemToCart = async (item: InventoryItem) => {
-    // for simplicity, we're only supporting moulding types and length price type for this example.
     const warehouseDetails = item.inventoryItemWarehouseDetails[0];
+    let uomId = null;
+    let listPrice = 0.0;
+    let alternatePriceTypeId = null;
+    if (item.itemType === "unit") {
+      // need to get the uom for the item. We'll just get the first UOM for this example.
+      const aap: IInventoryItemAlternatePrice = item.inventoryItemAlternatePrices[0];
+      uomId = aap.uomId;
+      listPrice = aap.price;
+      alternatePriceTypeId = aap.id;
+    } else {
+      // for simplicity, we're only supporting moulding types and length price type for this example.
+      listPrice = warehouseDetails.lengthPrice;
+    }
     const cartItem: WebOrderItem = {
       id: 0,
       inventoryItemId: item.id,
       quantity: 1,
-      listPrice: warehouseDetails.lengthPrice,
+      listPrice: listPrice,
       discountPrice: null,
-      itemType: "length",
+      itemType: item.itemType === InventoryItemType.TYPE_MOULDING ? "length" : null,
+      uomId: uomId,
+      alternatePriceTypeId: alternatePriceTypeId,
     };
     cartItems = cartItems.concat(cartItem);
   };
@@ -124,6 +139,16 @@
     <div>
       <h2>{item.itemnum}</h2>
       <p>{item.description}</p>
+      {#if item.itemType === "unit"}
+        <label>UOM:</label>
+        <select>
+          {#each item.inventoryItemAlternatePrices as uom}
+            <option>
+              {uom.uomDescription}
+            </option>
+          {/each}
+        </select>
+      {/if}
       <button on:click={() => addItemToCart(item)}>Add to cart</button>
     </div>
   {/each}
